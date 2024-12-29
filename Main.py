@@ -40,9 +40,9 @@ def producer(testing,access_token=None,client=0):
     """
     symb.connect()
     depth.connect()
-    symb.subscribe()
-    depth.subscribe()
-    time.sleep(60*60*6)
+    #symb.subscribe()
+    #depth.subscribe()
+    time.sleep(60*60*6+60*30) # six and a half hours
     print("its time to end!")
     depth.unsubscribe()
     symb.unsubscribe()
@@ -129,9 +129,7 @@ def SignalWorker(testing):
 
 
     
-def endDay(testing): # clears cache. 
-    dotenv.load_dotenv()
-    stonksList = json.loads(os.getenv("STOCKS"))["TEST"] if testing else json.loads(os.getenv("STOCKS"))["REAL"]
+def endDay(): # clears cache. 
     r = redis.Redis(host="localhost",port="6379",db=0)
     r.flushall()
 
@@ -164,16 +162,17 @@ def threadripper(token=None,testing=True):
         producerProcess =threading.Thread(target=producer,args=(testing,token))
     csvWorkerProcess = threading.Thread(target=csvWorker,args=('./data',testing))
     avgParserWorkerProcess = threading.Thread(target=avgParserWorker,args=('./averages',testing))
+    avgSignalWorker = threading.Thread(target=SignalWorker,args=(testing))
     
-    producerProcess.start()
     csvWorkerProcess.start()
     avgParserWorkerProcess.start()
-
+    avgSignalWorker.start()
+    producerProcess.start()
 
     producerProcess.join()
     csvWorkerProcess.join()
     avgParserWorkerProcess.join()
-
+    avgSignalWorker.join()
     endDay(testing)
 
 def processripper(token=None,testing=False):
