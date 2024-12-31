@@ -40,8 +40,8 @@ def producer(testing,access_token=None,client=0):
     """
     symb.connect()
     depth.connect()
-    #symb.subscribe()
-    #depth.subscribe()
+    symb.subscribe()
+    depth.subscribe()
     time.sleep(60*60*6+60*30) # six and a half hours
     print("its time to end!")
     depth.unsubscribe()
@@ -114,9 +114,9 @@ def SignalWorker(testing):
             for uncoded_msg in stream[1]:
                 msg = {key.decode('utf-8'): value.decode('utf-8') for key, value in uncoded_msg[1].items()} # decoding message
                 parsed_msg = avgParser.parseMsg(avg_r,msg)
-                print(parsed_msg)
                 if parsed_msg ==None:
                     continue
+                print(parsed_msg)
                 #looking for signals
                 try:
                     print('entering signal finder')
@@ -162,17 +162,17 @@ def threadripper(token=None,testing=True):
         producerProcess =threading.Thread(target=producer,args=(testing,token))
     csvWorkerProcess = threading.Thread(target=csvWorker,args=('./data',testing))
     avgParserWorkerProcess = threading.Thread(target=avgParserWorker,args=('./averages',testing))
-    avgSignalWorker = threading.Thread(target=SignalWorker,args=(testing))
+    #avgSignalWorker = threading.Thread(target=SignalWorker,args=(testing))
     
     csvWorkerProcess.start()
     avgParserWorkerProcess.start()
-    avgSignalWorker.start()
+    #avgSignalWorker.start()
     producerProcess.start()
 
     producerProcess.join()
     csvWorkerProcess.join()
     avgParserWorkerProcess.join()
-    avgSignalWorker.join()
+    #avgSignalWorker.join()
     endDay(testing)
 
 def processripper(token=None,testing=False):

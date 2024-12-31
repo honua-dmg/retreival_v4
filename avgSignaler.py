@@ -8,7 +8,7 @@ import redis
 import json
 import os
 import dotenv
-
+import threading
 # what's being saved in redis:
 """
     redlines : string, msg['stonk'].split('-')[0]+'-redLine'
@@ -20,7 +20,7 @@ import dotenv
     {"time":traded_time,"ltp":current_ltp,"count":avg_r.xlen(msg['stonk'].split('-')[0])}
 
 """
-def SignalFinder(msg,avg_r,polariser):
+def SignalFinder(msg,avg_r:redis.Redis,polariser):
     try:
         red_line_points = avg_r.get(msg['stonk'].split('-')[0]+'-redLine').decode('utf8').split(',')
     except AttributeError:
@@ -43,9 +43,12 @@ def SignalFinder(msg,avg_r,polariser):
         total_buy_qty = 0
 
     # min max calculation
-    slice =sorted([int(float(x[1][b'ltp'])) for x in avg_r.xrevrange(msg['stonk'].split('-')[0],count=slice_len)]) # pretty irritating code, deal with it :)
-    maxes = slice[-3:]
-    mins = slice[:3]
+    try:
+        slice =sorted([int(float(x[1][b'ltp'])) for x in avg_r.xrevrange(msg['stonk'].split('-')[0],count=slice_len)]) # pretty irritating code, deal with it :)
+        maxes = slice[-3:]
+        mins = slice[:3]
+    except Exception:
+        maxes,mins = [],[]
     # current ltp
     current_ltp  = int(float(msg['ltp']))
 
@@ -125,15 +128,15 @@ def SignalFinder(msg,avg_r,polariser):
                 
                 avg_r.xadd(msg['stonk'].split('-')[0]+'-long',{"time":traded_time,"ltp":current_ltp,"count":avg_r.xlen(msg['stonk'].split('-')[0])})
     # for reference :)
-    avg_r.xadd(msg['stonk'].split('-')[0],msg)
+    avg_r.xadd(msg['stonk'].split('-')[0],msg,maxlen=slice_len*2,approximate=True)
     # for graphing:
 
     graph_data = {
         'red': ','.join(red_line_points),
         'green': ','.join(green_line_points),
     }
-    avg_r.xadd(msg['stonk'].split('-')[0]+'GRAPH',graph_data)
-    print('added_graph_data to :{}'.format(msg['stonk'].split('-')[0]+'GRAPH'))
+    avg_r.xadd(msg['stonk'].split('-')[0]+'GRAPH',graph_data,maxlen=5,approximate=True)
+    #print('added_graph_data to :{}'.format(msg['stonk'].split('-')[0]+'GRAPH'))
 
 
 import matplotlib.pyplot as plt
@@ -235,10 +238,170 @@ def graphdisv2(testing):
 
             graph_data[stock_name] = {"red": red, "green": green, "shorts": shorts, "buys": buys}
 
-        update_plot(current_index)
-        plt.pause(0.005)
+            update_plot(current_index)
+            plt.pause(0.005)
+            plt.grid()
+    plt.show()
+
+import os
+import csv
+import pandas as pd
+
+# work in progress - the only thing that's preventing me from finishing this is them annoying ahh blocks
+def signalFinderCSV(msg,avg_r,polariser):
+    market,symbol = msg.pop('stonk').split('-')[0].split(':')
+    directory = os.path.join('./graphs',market,symbol)
+    if not os.path.exists(directory): #checking to see if file path exists                                            # we had to include this try block again due to issues in multiprocessing
+        os.makedirs(directory)  
+    india_date = dt.datetime.strftime(dt.datetime.now(dt.UTC) + dt.timedelta(hours=5.5),"%Y-%m-%d")
+    redgren = os.path.join(directory,f'GraphData-{india_date}.csv')
+
+    if not os.path.exists(redgren):
+        with open(redgren,'w') as f:
+            writer = csv.DictWriter(f,['red','green']) 
+
+
+    # red notice
+    if avg_r.get(msg['stonk'].split('-')[0]+'redNotice') == None:
+        avg_r.set(msg['stonk'].split('-')[0]+'redNotice','true')
+    # independant variables
+    slice_len =400
+    decision_range = 20
+    error_range =.3
+
+    try:
+        total_buy_qty = float(avg_r.get(msg['stonk'].split('-')[0]+'-total_buy'))
+    except Exception:
+        total_buy_qty = 0
+
+import redis
+import json
+import os
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
+import numpy as np
+import dotenv
+from matplotlib.ticker import MultipleLocator
+
+def graphdisv3(testing):
+    plt.ion()
+    dotenv.load_dotenv()
+
+    avg_r = redis.Redis(host="localhost", port="6379", db=2)
+    r = redis.Redis(host="localhost", port="6379", db=0)
+
+    _stonksList = json.loads(os.getenv("STOCKS"))["TEST"] if testing else json.loads(os.getenv("STOCKS"))["REAL"]
+    stonksList = [stonk.split('-')[0] for stonk in _stonksList]
+    stonks = {stonk.split('-')[0] + 'GRAPH': '$' for stonk in stonksList}
+
+    # Data structures for graph navigation, initially store empty data
+    graph_data = {stock: {"red": [], "green": [], "shorts": [], "buys": []} for stock in stonksList}
+    current_index = 0  # Default to the first stock
+
+    fig, ax = plt.subplots()
+    plt.subplots_adjust(bottom=0.2)
+
+    # Initialize the plot for red and green lines
+    red_line, = ax.plot([], [], color="#B22222", linewidth=1, label="Red")
+    green_line, = ax.plot([], [], color="#228B22", linewidth=1, label="Green")
+
+    def update_plot():
+        """Update the graph for the selected stock."""
+        nonlocal current_index
+        stock_name = stonksList[current_index]
+
+        # Get data for the current stock
+        red = graph_data[stock_name]["red"]
+        green = graph_data[stock_name]["green"]
+        shorts = graph_data[stock_name]["shorts"]
+        buys = graph_data[stock_name]["buys"]
+
+        ax.cla()  # Clear the axes but keep labels, title, etc.
+
+        # Plot the red and green lines
+        red_line.set_data(range(len(red)), red)
+        green_line.set_data(range(len(green)), green)
+        ax.plot(red_line.get_xdata(), red_line.get_ydata(), color="#B22222", linewidth=1, label="Red")
+        ax.plot(green_line.get_xdata(), green_line.get_ydata(), color="#228B22", linewidth=1, label="Green")
+
+        # Plot shorts and buys
+        for short in shorts:
+            ax.plot(short[0], short[1], "ro", markersize=5)
+        for buy in buys:
+            ax.plot(buy[0], buy[1], "bo", markersize=5)
+
+        # Set plot labels and title
+        ax.set_title(f"Graph for {stock_name}")
+        ax.xaxis.set_major_locator(MultipleLocator(100))
+        ax.yaxis.set_major_locator(MultipleLocator(10))
+        ax.legend()
+        fig.canvas.draw()
+
+    def next_graph(event):
+        nonlocal current_index
+        current_index = (current_index + 1) % len(stonksList)
+        update_plot()
+
+    def prev_graph(event):
+        nonlocal current_index
+        current_index = (current_index - 1) % len(stonksList)
+        update_plot()
+
+    axprev = plt.axes([0.1, 0.05, 0.1, 0.075])  # Position: left
+    axnext = plt.axes([0.8, 0.05, 0.1, 0.075])  # Position: right
+    bnext = Button(axnext, "Next")
+    bprev = Button(axprev, "Previous")
+    bnext.on_clicked(next_graph)
+    bprev.on_clicked(prev_graph)
+
+    def update_data():
+        """Fetch and update data for the current graph (only the active stock)."""
+        # Only fetch data for the current stock
+        stock_name = stonksList[current_index]
+        data = avg_r.xread({stock_name + "GRAPH": "$"}, block=100)
+        
+        if not data:
+            return
+
+        for stream in data:
+            msg = {key.decode("utf-8"): value.decode("utf-8") for key, value in stream[1][0][1].items()}
+
+            red = [int(float(x)) if x != "null" else np.nan for x in msg["red"].split(",")]
+            green = [int(float(x)) if x != "null" else np.nan for x in msg["green"].split(",")]
+
+            shorts = [
+                (int(float(point["count"])), int(float(point["ltp"])))
+                for point in (
+                    {k.decode("utf-8"): v.decode("utf-8") for k, v in msg.items()}
+                    for _, msg in avg_r.xrange(stock_name + "-short")
+                )
+            ]
+            buys = [
+                (int(float(point["count"])), int(float(point["ltp"])))
+                for point in (
+                    {k.decode("utf-8"): v.decode("utf-8") for k, v in msg.items()}
+                    for _, msg in avg_r.xrange(stock_name + "-long")
+                )
+            ]
+
+            # Update the current stock's data
+            graph_data[stock_name] = {"red": red, "green": green, "shorts": shorts, "buys": buys}
+
+    # Enter data update loop
+    while r.get("end") != b"true":
+        update_data()  # Fetch and update data only for the current stock
+        update_plot()  # Update the plot with the current stock data
+        plt.pause(0.005)  # Allow for real-time interaction
 
     plt.show()
 
+import Main
+
 if __name__=="__main__":
+    testing = True
+    stremz = threading.Thread(target=Main.SignalWorker,args=(testing,))
+    stremz.start()
     graphdisv2(True)
+    stremz.join()
+
+

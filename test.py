@@ -1,0 +1,16 @@
+
+import Main
+import wbsoc
+import redis
+import tracemalloc
+import datetime as dt
+import time
+r = redis.Redis(host="localhost",port="6379",db=0)
+r.flushall()
+
+token ='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhcGkuZnllcnMuaW4iLCJpYXQiOjE3MzU2MTU5OTYsImV4cCI6MTczNTY5MTQxNiwibmJmIjoxNzM1NjE1OTk2LCJhdWQiOlsieDowIiwieDoxIiwieDoyIiwiZDoxIiwiZDoyIiwieDoxIiwieDowIl0sInN1YiI6ImFjY2Vzc190b2tlbiIsImF0X2hhc2giOiJnQUFBQUFCbmMyWDhqVi1rTUdQb0cwazdWX3lWUmN4WTJnTGp5eXB1WXMzZTM3SmhDMkpvQnpwV2xLc1JTenQ3QURBdU5Ea3pUQzFKbkh2anVScDVKcUtSaTJ6WnZpSFI1anVTcDJxTXd3a1JHaExUbDRMdFpLWT0iLCJkaXNwbGF5X25hbWUiOiJNQUxMRVBBTExJIEdBSlVMQSBHVVJVIFNBSSBQUkFTQUQiLCJvbXMiOiJLMSIsImhzbV9rZXkiOiJiNGM5NzE0ZmY3ZjViYTBjNWYzMGRlYTEyOWIxY2Q1MGFkYjZkOTllZjk1MzhhMWVhMTVjMmUyYiIsImZ5X2lkIjoiWU0wODkyNyIsImFwcFR5cGUiOjEwMCwicG9hX2ZsYWciOiJOIn0.Se39ICFJ5AK6fy0arzCkjjUWIMeHpRCZs6UkQ3S_WjE'
+tracemalloc.start()
+Main.threadripper(token,True)
+
+with open("lawg.txt",'a') as f:
+    print(f"{dt.datetime.strftime(dt.datetime.fromtimestamp(time.time()),'%H-%M-%S')}: memory used:{tracemalloc.get_traced_memory}",file=f)

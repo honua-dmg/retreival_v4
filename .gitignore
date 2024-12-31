@@ -3,6 +3,8 @@ data/
 averages/
 msc/
 test/
+messages/
+downloaded_files/
 
 #testing
 ./test.ipynb

@@ -25,7 +25,7 @@ class _Data():
         self.india_date = dt.datetime.strftime(dt.datetime.now(dt.UTC) + dt.timedelta(hours=5.5),"%Y-%m-%d")
         
         # initialising the save files. 
-       
+        self.error = False
 
 
     """ the following 5 functions are for the websocket to use and implement"""
@@ -33,20 +33,22 @@ class _Data():
     def onmessage(self,message):
         print("Response:", message)
         if 'symbol' in message.keys():
-            self.r.xadd(message['symbol'].split('-')[0],message)
+            self.r.xadd(message['symbol'].split('-')[0],message,maxlen=20,approximate=True)
 
 
     def onerror(self,message):
         print("Error:", message)
-        if message == 'Connection to remote host was lost.':
-            self._subscribed = False
-            print('canceled subscription')
+        self.error = True
+
        
     def onclose(self,message):
         print("Connection closed:", message)
 
     def onopen(self):
         print('connection opened')
+        if self.error:
+            self.subscribe()
+            self.error = False
         self._connected = True
         if not self._subscribed: # indicates some error happened
             self.subscribe()
