@@ -65,14 +65,14 @@ def csvWorker(directory,testing): # should be on a separate process
         messages = r.xread(stonks,block=100)
         if messages == []:
             continue
-        print(messages)
+        #print(messages)
         for stream in messages:
             for uncoded_msg in stream[1]:
                 try:
                     worker.save_msg({key.decode('utf-8'): value.decode('utf-8') for key, value in uncoded_msg[1].items()})
                 except Exception as e:
                     print(e)
-                    logging.log(msg=f"{e} this went wrong :)")
+                    logging.log(msg=f"{e} this went wrong :) {time.time()}")
                     return
 
 
@@ -116,13 +116,13 @@ def SignalWorker(testing):
                 parsed_msg = avgParser.parseMsg(avg_r,msg)
                 if parsed_msg ==None:
                     continue
-                print(parsed_msg)
+                #print(parsed_msg)
                 #looking for signals
                 try:
-                    print('entering signal finder')
+                    #print('entering signal finder')
                     a.SignalFinder(parsed_msg,avg_r,polarisers[parsed_msg['stonk']])
                 except Exception: # incase we haven't made it yet
-                    print('faq, making polariser element')
+                    #print('faq, making polariser element')
                     polarisers[parsed_msg['stonk']] = {}
                     a.SignalFinder(parsed_msg,avg_r,polarisers[parsed_msg['stonk']])
     pd.DataFrame(polarisers).to_csv('polariser.csv')

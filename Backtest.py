@@ -18,7 +18,8 @@ from matplotlib.ticker import MultipleLocator
 class SingleavgParser():
     
     def __init__(self,symb_file_path,depth_file_path,file_name):
-        self.r  = redis.Redis(host="localhost",port="6379",db=0)
+        self.r  = redis.Redis(host="localhost",port="6379",db=4)
+        self.avg_r = redis.Redis(host="localhost",port="6379",db=5)
         self.file_name = file_name
         self.symbFile = symb_file_path
         self.depthFile = depth_file_path
@@ -43,7 +44,7 @@ class SingleavgParser():
  
         polarisers={}
         
-        avg_r = redis.Redis(host="localhost",port="6379",db=2)
+        self.avg_r = redis.Redis(host="localhost",port="6379",db=2)
 
 
         stonks = {self.file_name:'$'}
@@ -53,7 +54,7 @@ class SingleavgParser():
             for stream in data:
                 for uncoded_msg in stream[1]:
                     msg = {key.decode('utf-8'): value.decode('utf-8') for key, value in uncoded_msg[1].items()} # decoding message
-                    parsed_msg = avgParser.parseMsg(avg_r,msg)
+                    parsed_msg = avgParser.parseMsg(self.avg_r,msg)
                     
                     if parsed_msg ==None:
                         continue
@@ -61,19 +62,19 @@ class SingleavgParser():
                     #print(parsed_msg)
                     try:
                         #print('entering signal finder')
-                        a.SignalFinder(parsed_msg,avg_r,polarisers[parsed_msg['stonk']])
+                        a.SignalFinder(parsed_msg,self.avg_r,polarisers[parsed_msg['stonk']])
                     except Exception: # incase we haven't made it yet
                         #print('faq, making polariser element')
                         polarisers[parsed_msg['stonk']] = {}
                         #print('made polariser dict')
-                        a.SignalFinder(parsed_msg,avg_r,polarisers[parsed_msg['stonk']])
+                        a.SignalFinder(parsed_msg,self.avg_r,polarisers[parsed_msg['stonk']])
         #pd.DataFrame(polarisers).to_csv('polariser.csv')
 
     def graph(self):
         plt.ion()
 
 
-        avg_r = redis.Redis(host="localhost", port="6379", db=2)
+        self.avg_r = redis.Redis(host="localhost", port="6379", db=2)
         
 
 
@@ -143,7 +144,7 @@ class SingleavgParser():
             """Fetch and update data for the current graph (only the active stock)."""
             # Only fetch data for the current stock
             stock_name = stonksList[current_index]
-            data = avg_r.xread({stock_name + "GRAPH": "$"}, block=100)
+            data = self.avg_r.xread({stock_name + "GRAPH": "$"}, block=100)
             print("checking for updates")
             if not data:
                 print('no data')
@@ -159,14 +160,14 @@ class SingleavgParser():
                     (int(float(point["count"])), int(float(point["ltp"])))
                     for point in (
                         {k.decode("utf-8"): v.decode("utf-8") for k, v in msg.items()}
-                        for _, msg in avg_r.xrange(stock_name + "-short")
+                        for _, msg in self.avg_r.xrange(stock_name + "-short")
                     )
                 ]
                 buys = [
                     (int(float(point["count"])), int(float(point["ltp"])))
                     for point in (
                         {k.decode("utf-8"): v.decode("utf-8") for k, v in msg.items()}
-                        for _, msg in avg_r.xrange(stock_name + "-long")
+                        for _, msg in self.avg_r.xrange(stock_name + "-long")
                     )
                 ]
 
@@ -188,7 +189,7 @@ class SingleavgParser():
     def start(self):
         emulator = threading.Thread(target = self.emulateDataStream)
         signaler = threading.Thread(target = self.signals)
-        
+        self.graph()
         signaler.start()
         
         emulator.start()
@@ -198,8 +199,8 @@ class SingleavgParser():
 
 
 if __name__ == "__main__":
-    symb_file='data/NSE/BAJFINANCE/symbol-2024-12-30.csv'
-    dep_file = 'data/NSE/BAJFINANCE/depth-2024-12-30.csv'
+    symb_file='data/NSE/GRWRHITECH/symbol-2024-12-31.csv'
+    dep_file = 'data/NSE/GRWRHITECH/depth-2024-12-31.csv'
     name = "NSE:BAJFINANCE"
     SingleavgParser(symb_file,dep_file,name).start()
     

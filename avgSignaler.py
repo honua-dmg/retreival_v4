@@ -110,7 +110,7 @@ def SignalFinder(msg,avg_r:redis.Redis,polariser):
                 print(f'SHORT SIGNAL:\n\ttraded_time:{traded_time}: 20+gap found at ltp: {current_ltp},reds:{reds},greens:{greens}\n',file=f)
                 shortSignal = '{},{}'.format(current_ltp,avg_r.xlen(msg['stonk'].split('-')[0]))
                 # saving SHORT to redis 
-                avg_r.xadd(msg['stonk'].split('-')[0]+'-short',{"time":traded_time,"ltp":current_ltp,"count":avg_r.xlen(msg['stonk'].split('-')[0])})
+                avg_r.xadd(msg['stonk'].split('-')[0]+'-short',{"time":traded_time,"ltp":current_ltp,"count":len(green_line_points)})
         # potential buy signal : short but inverted
         if len(above)>decision_range:
             print('\tchecking for a buy',file=f)
@@ -120,13 +120,14 @@ def SignalFinder(msg,avg_r:redis.Redis,polariser):
                     reds+=1
                 else:
                     greens+=1
+                    
             print(f'\treds:{reds},greens:{greens}',file=f)
             if reds>=decision_range*(1-error_range) and greens/(reds+greens)<=error_range and current_ltp in mins:
                 print(f'BUY SIGNAL:\n\ttraded_time:{traded_time} 20+gap found at ltp: {current_ltp},reds:{reds},greens:{greens}\n',file=f)
                 buySignal = '{},{}'.format(current_ltp,avg_r.xlen(msg['stonk'].split('-')[0]))
                 # saving BUY to redis 
                 
-                avg_r.xadd(msg['stonk'].split('-')[0]+'-long',{"time":traded_time,"ltp":current_ltp,"count":avg_r.xlen(msg['stonk'].split('-')[0])})
+                avg_r.xadd(msg['stonk'].split('-')[0]+'-long',{"time":traded_time,"ltp":current_ltp,"count":len(green_line_points)})
     # for reference :)
     avg_r.xadd(msg['stonk'].split('-')[0],msg,maxlen=slice_len*2,approximate=True)
     # for graphing:

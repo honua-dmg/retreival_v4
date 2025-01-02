@@ -23,7 +23,7 @@ def to_csv(output,dir):
     with open(file_path,'a') as f:
 
         if os.path.getsize(file_path) == 0:
-            print('file doesn not exist, making one now')
+            print(f'{market}:{symbol} file doesn not exist, making one now')
             f.write(','.join([key for key in sorted(output.keys())]))
             f.write("\n")
         f.write(','.join([str(output[x])for x  in sorted(output.keys()) ]))
@@ -186,10 +186,10 @@ def buy_sell_avg(type,r,file_symbol,message,delta_vol,output):
         prev_avg = int(r.get(f'{file_symbol}-avg-{order[0]}'))
     else:
         prev_avg = 0
-    print(f'\tprev avg{prev_avg}, current avg:{average}')
+    #print(f'\tprev avg{prev_avg}, current avg:{average}')
     # sequence
     if r.get(f'{file_symbol}-sequence-{order[0]}')!=None: #checking a value exists in cache
-        print('sequence found in cache')
+        #print('sequence found in cache')
 
         sequence = int(r.get(f'{file_symbol}-sequence-{order[0]}'))
         if prev_avg != average:

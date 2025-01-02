@@ -15,47 +15,48 @@ class _Data():
         dotenv.load_dotenv()
         self.testing = testing
         self.stonks = json.loads(os.getenv("STOCKS"))["TEST"] if testing else json.loads(os.getenv("STOCKS"))["REAL"] # list of stonks in "NSE:SBIN-EQ" this format
-        self._connected = False
-        self._subscribed = False
-        self._litemode = False
+
         self.data_type = datatype # defined in subclasses
         self.keys = json.loads(os.getenv("DATA_FIELDS"))[datatype]
         self.r = redis_client
         #datetime in YYYY-MM-DD format
         self.india_date = dt.datetime.strftime(dt.datetime.now(dt.UTC) + dt.timedelta(hours=5.5),"%Y-%m-%d")
-        
-        # initialising the save files. 
+        # indicators 
+        self.fyers = None
         self.error = False
+        self._connected = False
+        self._subscribed = False
+        self._litemode = False
 
 
     """ the following 5 functions are for the websocket to use and implement"""
 
     def onmessage(self,message):
-        print("Response:", message)
+        #print("Response:", message) # don't need this no more :)
         if 'symbol' in message.keys():
             self.r.xadd(message['symbol'].split('-')[0],message,maxlen=20,approximate=True)
-
+            self.error = False
 
     def onerror(self,message):
-        print("Error:", message)
         self.error = True
+        print("Error:", message,time.time())
 
-       
     def onclose(self,message):
         print("Connection closed:", message)
 
     def onopen(self):
-        print('connection opened')
-        if self.error:
-            self.subscribe()
-            self.error = False
-        self._connected = True
-        if not self._subscribed: # indicates some error happened
-            self.subscribe()
-            print('reestablished connection')
-            self._subscribed = True
+        print('connected :)')
+        self._connected= True
 
     def connect(self):
+        if self.fyers==None:
+            self.initialiseFyersObject()
+        self.fyers.connect()
+        self.r.set('end','false') 
+        self._connected = True
+        
+
+    def initialiseFyersObject(self):
         self.fyers  = data_ws.FyersDataSocket(
         access_token=self.access_token,       # Access token in the format "appid:accesstoken"
         log_path='',                     # Path to save logs. Leave empty to auto-create logs in the current directory.
@@ -66,14 +67,9 @@ class _Data():
         on_close=self.onclose,                # Callback function to handle WebSocket connection close events.
         on_error=self.onerror,                # Callback function to handle WebSocket errors.
         on_message=self.onmessage,            # Callback function to handle incoming messages from the WebSocket.
-        reconnect_retry=10               # Number of times reconnection will be attepmted in case
+        reconnect_retry=10                   # Number of times reconnection will be attepmted in case
         )
-        self.fyers.connect()
-        self.r.set('end','false')
-        self._connected = True
         
-
-    
     def subscribe(self):
         """
         subscribes to websocket to begin recieving a stream of ticker data.
@@ -83,6 +79,7 @@ class _Data():
             self.fyers.subscribe(symbols=self.stonks,data_type="SymbolUpdate" if self.data_type=="symbol" else "DepthUpdate") # subscribe to websocket
             self.fyers.keep_running()
             self._subscribed = True
+            print("SUBSCRIBED!!")
         else:
             print(f'initialise websocket via .connect()')
 
@@ -106,6 +103,7 @@ class _Data():
             self._connected = False
         else:
             raise Exception("connect to the server first!")
+    # WILL REMOVE THIS ( NOT UED ANYWHERE)
     def keepAlive(self):
         dotenv.load_dotenv()
         stonksList = json.loads(os.getenv("STOCKS"))["TEST"] if self.testing else json.loads(os.getenv("STOCKS"))["REAL"]
@@ -126,6 +124,8 @@ class _Data():
                     with open('log.txt','a') as f:
                         print(f'connection failed to uphold, time:{dt.datetime.strftime(dt.datetime.now(dt.UTC) + dt.timedelta(hours=5.5),"%Y-%m-%d:: %H:%M:%S")}, tough luck buddy')
             time.sleep(60)
+
+    
 class Symbol(_Data):
     def __init__(self,redis_client,access_token:str,testing:bool):
         super().__init__(redis_client,access_token,"symbol",testing)
